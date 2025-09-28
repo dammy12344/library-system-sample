@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useAuth } from './hooks/useAuth';
+import { isSupabaseConfigured } from './lib/supabase';
 import { AuthForm } from './components/AuthForm';
+import { SupabaseSetup } from './components/SupabaseSetup';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
 import { BooksPage } from './components/BooksPage';
@@ -9,6 +11,11 @@ import { BorrowsPage } from './components/BorrowsPage';
 function App() {
   const { user, loading } = useAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
+
+  // Check if Supabase is configured
+  if (!isSupabaseConfigured()) {
+    return <SupabaseSetup />;
+  }
 
   if (loading) {
     return (
