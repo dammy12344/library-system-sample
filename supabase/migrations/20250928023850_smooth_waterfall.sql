@@ -8,7 +8,7 @@
       - `email` (text, unique)
       - `role` (text, either 'admin' or 'user')
       - `created_at` (timestamp)
-    
+
     - `books`
       - `id` (uuid, primary key)
       - `title` (text)
@@ -18,7 +18,7 @@
       - `total_copies` (integer)
       - `available_copies` (integer)
       - `created_at` (timestamp)
-    
+
     - `borrows`
       - `id` (uuid, primary key)
       - `user_id` (uuid, references profiles)
@@ -31,8 +31,15 @@
 
   2. Security
     - Enable RLS on all tables
-    - Add policies for authenticated users to manage their own data
-    - Add policies for admins to manage all data
+    - Profiles: Users can read/update their own profile, admins can read all profiles
+    - Books: Authenticated users can read books, admins can manage books
+    - Borrows: Users can read their own borrows and create borrows for themselves, admins can manage all borrows
+
+  3. Important Notes
+    - All tables have RLS enabled with restrictive policies
+    - Users are automatically assigned 'user' role on signup
+    - Only authenticated users can access data
+    - Admin role required for management operations
 */
 
 -- Create profiles table
@@ -82,7 +89,8 @@ CREATE POLICY "Users can read their own profile"
 CREATE POLICY "Users can update their own profile"
   ON profiles FOR UPDATE
   TO authenticated
-  USING (auth.uid() = id);
+  USING (auth.uid() = id)
+  WITH CHECK (auth.uid() = id);
 
 CREATE POLICY "Admins can read all profiles"
   ON profiles FOR SELECT
@@ -94,14 +102,40 @@ CREATE POLICY "Admins can read all profiles"
     )
   );
 
--- Books policies
-CREATE POLICY "Anyone can read books"
+-- Books policies - Users can read, admins can manage
+CREATE POLICY "Authenticated users can read books"
   ON books FOR SELECT
   TO authenticated
-  USING (true);
+  USING (auth.uid() IS NOT NULL);
 
-CREATE POLICY "Admins can manage books"
-  ON books FOR ALL
+CREATE POLICY "Admins can insert books"
+  ON books FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can update books"
+  ON books FOR UPDATE
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can delete books"
+  ON books FOR DELETE
   TO authenticated
   USING (
     EXISTS (
@@ -116,11 +150,6 @@ CREATE POLICY "Users can read their own borrows"
   TO authenticated
   USING (user_id = auth.uid());
 
-CREATE POLICY "Users can create borrows for themselves"
-  ON borrows FOR INSERT
-  TO authenticated
-  WITH CHECK (user_id = auth.uid());
-
 CREATE POLICY "Admins can read all borrows"
   ON borrows FOR SELECT
   TO authenticated
@@ -131,8 +160,45 @@ CREATE POLICY "Admins can read all borrows"
     )
   );
 
-CREATE POLICY "Admins can manage all borrows"
-  ON borrows FOR ALL
+CREATE POLICY "Users can create borrows for themselves"
+  ON borrows FOR INSERT
+  TO authenticated
+  WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY "Admins can create any borrow"
+  ON borrows FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+CREATE POLICY "Users can update their own borrows"
+  ON borrows FOR UPDATE
+  TO authenticated
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY "Admins can update any borrow"
+  ON borrows FOR UPDATE
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can delete borrows"
+  ON borrows FOR DELETE
   TO authenticated
   USING (
     EXISTS (
